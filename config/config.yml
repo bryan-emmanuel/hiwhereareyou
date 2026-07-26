@@ -1,0 +1,42 @@
+# Scavenger Hunt Configuration
+
+telegram:
+  bot_token: "YOUR_TELEGRAM_BOT_TOKEN"
+  bot_username: "YOUR_BOT_USERNAME"  # Without the '@', e.g. MyScavengerHuntBot
+  admin_channel_id: "YOUR_ADMIN_CHANNEL_ID"  # Channel username or numeric ID (e.g. -1001234567890)
+
+twilio:
+  account_sid: "YOUR_TWILIO_ACCOUNT_SID"
+  auth_token: "YOUR_TWILIO_AUTH_TOKEN"
+  phone_number: "+15551234567"  # Your Twilio phone number
+  admin_phone_number: "+15557654321"  # Phone number where admin MMS photos and alerts will be sent
+  webhook_host: "0.0.0.0"
+  webhook_port: 5000
+
+game:
+  start_param: "start"
+  start_message: |
+    🎉 *Welcome to the Scavenger Hunt!* 🎉
+    
+    Here is your first clue:
+    🔍 _{clue}_
+    
+    Go to the location and scan the QR code to unlock the next step!
+  final_message: |
+    🏆 *Congratulations!* 🏆
+    
+    You have successfully completed the Scavenger Hunt! 
+    Please let the organizers know you have finished.
+    
+    Thank you for playing!
+
+locations:
+  - id: "fountain_8f2a"
+    name: "The Garden Fountain"
+    clue: "Where water dances in the sun, but never runs away."
+  - id: "library_3d9c"
+    name: "The Main Library Room"
+    clue: "A quiet place where thousands of stories are stacked, waiting to be read."
+  - id: "clocktower_7p1v"
+    name: "The Grand Clock Tower"
+    clue: "Seek the giant hands that chase each other all day long."

@@ -1,0 +1,17 @@
+version: "3.8"
+
+services:
+  bot:
+    build: .
+    container_name: scavenger_hunt_bot
+    restart: unless-stopped
+    volumes:
+      # Mount config so changes in clues/settings don't require container rebuilds
+      - ./config/config.yml:/app/config/config.yml
+      # Mount qrs folder to retrieve generated QR codes easily on the host
+      - ./qrs:/app/qrs
+    environment:
+      # Can be defined in a .env file in the same directory
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_ADMIN_CHANNEL_ID=${TELEGRAM_ADMIN_CHANNEL_ID}
+      - TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME}
