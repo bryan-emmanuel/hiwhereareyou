@@ -11,6 +11,11 @@ A Python-based, fully stateless Scavenger Hunt game utilizing a strict **Service
 - **Direct Admin Registration**: Admins register player IDs directly via bot messaging (E.164 phone numbers for Twilio, usernames/chat IDs for Telegram).
 - **Direct QR Scans**: Since players are registered directly in the bot database, physical QR codes link directly back to the Telegram bot (`https://t.me/Bot?start=location_id`) or Twilio SMS body (`sms:number?body=location_id`). No redirection web server or player-specific hash computation is required.
 - **Security / Abuse Hardening**: The bot ignores any message (start or location scan) from unregistered players outright. 
+- **Stateless Next-Clue Progression**: 
+  - There is no start parameter. The game begins directly when a registered player scans the QR code at Location 1.
+  - When Location X is scanned, the bot looks up its index and replies with the clue leading to Location X+1.
+  - When the final location is scanned, the bot delivers the completion message and alerts the admins.
+  - Progression is fully stateless at runtime, resolved dynamically via configuration lookup.
 - **Unguessable Location Codes**: Location IDs in `config.yml` can contain random suffixes (e.g., `fountain_8f2a`) to prevent registered players from guessing coordinates and skipping steps.
 - **Interactive Terminal Simulator**: Run the game engine directly in your command line with simulated player and admin commands.
 

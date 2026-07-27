@@ -93,10 +93,8 @@ async def test_location_solve_unregistered_fails(sample_config):
     engine = ScavengerHuntEngine(config_provider, player_messaging, admin_notification, player_registry)
 
     player_address = "+15559999"
-    # Unregistered player tries to scan Location 1 directly
     await player_messaging._handler(player_address, "loc1_abc")
 
-    # Output message should be ignored outright (no message sent)
     assert len(player_messaging.sent_messages) == 0
     assert not player_registry.is_player_registered("+15559999")
 
@@ -108,18 +106,14 @@ async def test_admin_generate_registers_and_confirms(sample_config):
     player_registry = MockPlayerRegistry()
     engine = ScavengerHuntEngine(config_provider, player_messaging, admin_notification, player_registry)
 
-    # Admin registers a player
     await admin_notification._handler("admin_chat", "generate +15559999")
 
-    # Verify player registered
     assert player_registry.is_player_registered("+15559999")
-    
-    # Simple confirmation reply back to admin
     assert len(admin_notification.sent_logs) == 1
     assert "Player/Group +15559999 registered successfully!" in admin_notification.sent_logs[0]
 
 @pytest.mark.asyncio
-async def test_location_solve_registered_player(sample_config):
+async def test_location_solve_next_clue_progression(sample_config):
     config_provider = MockConfigProvider(sample_config)
     player_messaging = MockPlayerMessaging()
     admin_notification = MockAdminNotification()
@@ -129,13 +123,34 @@ async def test_location_solve_registered_player(sample_config):
     player_address = "+15559999"
     player_registry.register_player("+15559999")
 
-    # Solve Location 1 directly as the very first step
+    # Solve Location 1 -> should deliver clue for Location 2
     await player_messaging._handler(player_address, "loc1_abc")
 
-    # Verify clue for location 1 is returned
     assert len(player_messaging.sent_messages) == 1
     assert "*Location Found:* Location One" in player_messaging.sent_messages[0][1]
-    assert "Solve clue one" in player_messaging.sent_messages[0][1]
+    assert "Solve clue two" in player_messaging.sent_messages[0][1]
+
+@pytest.mark.asyncio
+async def test_final_location_solve_completion(sample_config):
+    config_provider = MockConfigProvider(sample_config)
+    player_messaging = MockPlayerMessaging()
+    admin_notification = MockAdminNotification()
+    player_registry = MockPlayerRegistry()
+    engine = ScavengerHuntEngine(config_provider, player_messaging, admin_notification, player_registry)
+
+    player_address = "+15559999"
+    player_registry.register_player("+15559999")
+
+    # Solve Location 3 (final location) -> should deliver final message and alert admin
+    await player_messaging._handler(player_address, "loc3_ghi")
+
+    assert len(player_messaging.sent_messages) == 1
+    assert "*Final Location Found:* Location Three" in player_messaging.sent_messages[0][1]
+    assert "You finished the hunt!" in player_messaging.sent_messages[0][1]
+
+    # Admin notified
+    assert len(admin_notification.sent_logs) == 1
+    assert "has completed the scavenger hunt" in admin_notification.sent_logs[0]
 
 @pytest.mark.asyncio
 async def test_invalid_location_solve_ignored(sample_config):
@@ -148,7 +163,6 @@ async def test_invalid_location_solve_ignored(sample_config):
     player_address = "+15559999"
     player_registry.register_player("+15559999")
 
-    # Send incorrect code
     await player_messaging._handler(player_address, "loc1_wrong")
 
     assert len(player_messaging.sent_messages) == 0
