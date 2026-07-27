@@ -28,23 +28,8 @@ def main():
 
     print(f"📱 Generating QR codes for platform: {args.platform.upper()}\n")
 
-    # 1. Start Seed QR code
-    if args.platform == "telegram":
-        seed_url = f"https://t.me/{config.telegram_bot_username}?start={config.start_param}"
-    else:
-        seed_url = f"sms:{config.twilio_phone_number}?body={config.start_param}"
-
-    seed_path = os.path.join(args.outdir, "00_start_seed.png")
-    print(f"   [Start Seed]")
-    print(f"   Link: {seed_url}")
-    print(f"   Path: {seed_path}")
-    
-    seed_qr_bytes = qr_generator.generate_qr_code(seed_url)
-    with open(seed_path, "wb") as f:
-        f.write(seed_qr_bytes)
-
-    # 2. Location QR codes
-    print("\n📍 Generating Location QR codes:")
+    # Generate Location QR codes
+    print("📍 Generating Location QR codes:")
     for idx, loc in enumerate(config.locations, 1):
         if args.platform == "telegram":
             loc_url = f"https://t.me/{config.telegram_bot_username}?start={loc.id}"

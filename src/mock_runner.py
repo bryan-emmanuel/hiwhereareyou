@@ -54,8 +54,8 @@ class MockAdminNotification(AdminNotificationService):
         pass
 
 async def main():
-    print("🤖 Scavenger Hunt Simulator (Direct Registration Flow) 🤖")
-    print("=========================================================")
+    print("🤖 Scavenger Hunt Simulator (Direct Registration & Key-Value Lookup) 🤖")
+    print("=====================================================================")
     print("Loading config/config.yml...")
     
     config_provider = YAMLConfigProvider("config/config.yml")
@@ -87,16 +87,13 @@ async def main():
             pass
 
     print("\n=========================================================")
-    print("📍 PLAIN TEXT COMMANDS FOR THIS SIMULATOR")
+    print("📍 LOCATION SCAN CODES FOR THIS SIMULATOR")
     print("=========================================================")
-    print(f"1. Start Command:      {config.start_param}")
-    print("\n2. Location Scan codes:")
     for idx, loc in enumerate(config.locations, 1):
         print(f"   [{idx}] {loc.name}: {loc.id}")
     print("=========================================================\n")
 
     print("Simulator Commands:")
-    print("  /start [param]       - Simulate player starting (e.g. '/start start')")
     print("  /photo [id]          - Simulate player uploading photo (e.g. '/photo group_pic_1')")
     print("  /help                - Show help instructions for players")
     print("  /exit                - Exit simulator")
@@ -104,7 +101,7 @@ async def main():
     print("  /admin reset         - Simulate admin wiping player registry")
     print("  /admin generate <id> - Simulate admin registering a player ID (e.g. '/admin generate +15559999')")
     print("  /admin [text]        - Simulate admin sending general command text")
-    print("  [text]               - Send raw text as player")
+    print("  [location_id]        - Send location ID text as player (simulates direct scan)")
     print("=========================================================\n")
 
     admin_address = "admin_channel_or_number"
@@ -130,11 +127,6 @@ async def main():
         elif line == "/help":
             if player_messaging._handler:
                 await player_messaging._handler(player_address, "help", None)
-        elif line.startswith("/start"):
-            parts = line.split(" ", 1)
-            param = parts[1].strip() if len(parts) > 1 else ""
-            if player_messaging._handler:
-                await player_messaging._handler(player_address, param, None)
         elif line.startswith("/photo"):
             parts = line.split(" ", 1)
             photo_id = parts[1].strip() if len(parts) > 1 else "mock_photo_url_or_id"

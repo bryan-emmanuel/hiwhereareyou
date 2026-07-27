@@ -77,51 +77,26 @@ class ScavengerHuntEngine:
         if not cleaned_text:
             return
 
-        # 4. Check if input matches the start parameter
-        if cleaned_text.lower() == config.start_param.lower():
-            if not config.locations:
-                return
-
-            first_clue = config.locations[0].clue
-            msg = config.start_message.format(player_id=player_id, clue=first_clue)
-            await self.player_messaging.send_message(sender_address, msg)
-            return
-
-        # 5. Check if the input text matches any location ID directly
-        location_idx = -1
-        for idx, loc in enumerate(config.locations):
+        # 4. Check if the input text matches any location ID directly
+        solved_location = None
+        for loc in config.locations:
             if cleaned_text.lower() == loc.id.lower():
-                location_idx = idx
+                solved_location = loc
                 break
 
         # If it doesn't match any location ID, ignore outright
-        if location_idx == -1:
+        if not solved_location:
             logger.info(f"Ignored invalid command/message from registered player {player_id}: '{cleaned_text}'")
             return
 
-        solved_location = config.locations[location_idx]
-
-        # Check if there is a next location
-        if location_idx + 1 < len(config.locations):
-            next_location = config.locations[location_idx + 1]
-            success_msg = (
-                f"✅ *Location Found:* {solved_location.name}\n\n"
-                f"Here is your next clue:\n"
-                f"🔍 _{next_location.clue}_\n\n"
-                f"📸 *Optional:* Send a photo of your group here to share it with the organizers!"
-            )
-            await self.player_messaging.send_message(sender_address, success_msg)
-        else:
-            # Final location!
-            success_msg = (
-                f"🏆 *Final Location Found:* {solved_location.name}!\n\n"
-                f"{config.final_message}\n\n"
-                f"📸 *Optional:* Send a photo of your group here to share it with the organizers!"
-            )
-            await self.player_messaging.send_message(sender_address, success_msg)
-            
-            # Send completion notification to admins
-            await self.admin_notification.notify_text(f"🏁 Player/Group {player_id} has completed the scavenger hunt!")
+        # Deliver the clue/activity details for the scanned location directly
+        success_msg = (
+            f"✅ *Location Found:* {solved_location.name}\n\n"
+            f"🔍 *Clue/Description:*\n"
+            f"_{solved_location.clue}_\n\n"
+            f"📸 *Optional:* Send a photo of your group here to share it with the organizers!"
+        )
+        await self.player_messaging.send_message(sender_address, success_msg)
 
     async def handle_admin_message(self, sender_address: str, text: str) -> None:
         """

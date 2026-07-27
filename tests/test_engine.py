@@ -76,8 +76,6 @@ def sample_config() -> GameConfig:
         twilio_admin_phone_number="+15552222",
         twilio_webhook_host="0.0.0.0",
         twilio_webhook_port=5000,
-        start_param="start",
-        start_message="Welcome! First Clue: {clue}",
         final_message="You finished the hunt!",
         locations=[
             Location(id="loc1_abc", name="Location One", clue="Solve clue one"),
@@ -121,23 +119,6 @@ async def test_admin_generate_registers_and_confirms(sample_config):
     assert "Player/Group +15559999 registered successfully!" in admin_notification.sent_logs[0]
 
 @pytest.mark.asyncio
-async def test_registered_player_starts_game(sample_config):
-    config_provider = MockConfigProvider(sample_config)
-    player_messaging = MockPlayerMessaging()
-    admin_notification = MockAdminNotification()
-    player_registry = MockPlayerRegistry()
-    engine = ScavengerHuntEngine(config_provider, player_messaging, admin_notification, player_registry)
-
-    player_address = "+15559999"
-    player_registry.register_player("+15559999")
-
-    # Registered player starts
-    await player_messaging._handler(player_address, "start")
-
-    assert len(player_messaging.sent_messages) == 1
-    assert "Welcome! First Clue: Solve clue one" in player_messaging.sent_messages[0][1]
-
-@pytest.mark.asyncio
 async def test_location_solve_registered_player(sample_config):
     config_provider = MockConfigProvider(sample_config)
     player_messaging = MockPlayerMessaging()
@@ -148,12 +129,13 @@ async def test_location_solve_registered_player(sample_config):
     player_address = "+15559999"
     player_registry.register_player("+15559999")
 
-    # Solve Location 1
+    # Solve Location 1 directly as the very first step
     await player_messaging._handler(player_address, "loc1_abc")
 
+    # Verify clue for location 1 is returned
     assert len(player_messaging.sent_messages) == 1
     assert "*Location Found:* Location One" in player_messaging.sent_messages[0][1]
-    assert "Solve clue two" in player_messaging.sent_messages[0][1]
+    assert "Solve clue one" in player_messaging.sent_messages[0][1]
 
 @pytest.mark.asyncio
 async def test_invalid_location_solve_ignored(sample_config):
