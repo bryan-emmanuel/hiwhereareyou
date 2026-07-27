@@ -134,7 +134,9 @@ class ScavengerHuntEngine:
                 "🛠 *Administrator Functions:*\n\n"
                 "• `help` - Show this list of functions.\n"
                 "• `generate <Player ID>` - Register a player's phone number or Telegram ID (e.g. `generate +15551234567` or `generate @username`).\n"
-                "• `reset` - Reset the active players registry, clearing all registered players."
+                "• `reset` - Reset the active players registry, clearing all registered players.\n"
+                "• `locations` - View all game locations with IDs, clues, and shareable message links.\n"
+                "• `test <message>` - Simulate a player message and receive the same reply a player would."
             )
             await self.admin_notification.notify_text(help_msg)
             return
@@ -167,6 +169,63 @@ class ScavengerHuntEngine:
             
             # Simple confirmation of the successful registration
             await self.admin_notification.notify_text(f"👤 Player/Group {player_id} registered successfully!")
+            return
+
+        elif command == "locations":
+            config = self.config
+            if not config.locations:
+                await self.admin_notification.notify_text("📍 No locations configured.")
+                return
+
+            lines = ["📍 *Game Locations:*\n"]
+            for idx, loc in enumerate(config.locations, 1):
+                tg_link = f"https://t.me/{config.telegram_bot_username}?start={loc.id}"
+                sms_link = f"sms:{config.twilio_phone_number}?body={loc.id}"
+                lines.append(
+                    f"*{idx}. {loc.name}*\n"
+                    f"   ID: `{loc.id}`\n"
+                    f"   Clue: _{loc.clue}_\n"
+                    f"   Telegram: {tg_link}\n"
+                    f"   SMS: `{sms_link}`\n"
+                )
+            await self.admin_notification.notify_text("\n".join(lines))
+            return
+
+        elif command == "test":
+            if not args:
+                await self.admin_notification.notify_text("⚠️ *Usage:* `test <message>` (e.g., `test fountain_8f2a`)")
+                return
+
+            # Process the message through the player handler, but route the reply back to the admin channel
+            config = self.config
+            location_idx = -1
+            for idx, loc in enumerate(config.locations):
+                if args.lower() == loc.id.lower():
+                    location_idx = idx
+                    break
+
+            if location_idx == -1:
+                await self.admin_notification.notify_text(f"🧪 *Test Result:* Message `{args}` would be ignored (no matching location).")
+                return
+
+            solved_location = config.locations[location_idx]
+
+            if location_idx + 1 < len(config.locations):
+                next_location = config.locations[location_idx + 1]
+                reply = (
+                    f"✅ *Location Found:* {solved_location.name}\n\n"
+                    f"Here is your next clue:\n"
+                    f"🔍 _{next_location.clue}_\n\n"
+                    f"📸 *Optional:* Send a photo of your group here to share it with the organizers!"
+                )
+            else:
+                reply = (
+                    f"🏆 *Final Location Found:* {solved_location.name}!\n\n"
+                    f"{config.final_message}\n\n"
+                    f"📸 *Optional:* Send a photo of your group here to share it with the organizers!"
+                )
+
+            await self.admin_notification.notify_text(f"🧪 *Test Result for* `{args}`:\n\n{reply}")
             return
 
         else:
