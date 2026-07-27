@@ -77,17 +77,7 @@ class ScavengerHuntEngine:
         if not cleaned_text:
             return
 
-        # 4. Check if input matches the start parameter
-        if cleaned_text.lower() == config.start_param.lower():
-            if not config.locations:
-                return
-
-            first_clue = config.locations[0].clue
-            msg = config.start_message.format(player_id=player_id, clue=first_clue)
-            await self.player_messaging.send_message(sender_address, msg)
-            return
-
-        # 5. Check if the input text matches any location ID directly
+        # 4. Check if the input text matches any location ID directly
         location_idx = -1
         for idx, loc in enumerate(config.locations):
             if cleaned_text.lower() == loc.id.lower():
