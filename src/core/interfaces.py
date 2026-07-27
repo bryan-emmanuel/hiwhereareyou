@@ -5,6 +5,9 @@ from src.core.models import GameConfig
 # Callback type for players: (player_address, text_content, optional_media_url_or_id)
 PlayerInboundHandler = Callable[[str, str, Optional[str]], Coroutine[None, None, None]]
 
+# Callback type for administrators: (admin_address, text_content)
+AdminInboundHandler = Callable[[str, str], Coroutine[None, None, None]]
+
 class ConfigProvider(ABC):
     @abstractmethod
     def get_game_config(self) -> GameConfig:
@@ -37,8 +40,16 @@ class PlayerMessagingService(ABC):
 
 class AdminNotificationService(ABC):
     @abstractmethod
+    def set_inbound_handler(self, handler: AdminInboundHandler) -> None:
+        """
+        Registers the game engine callback for administrator commands/messages.
+        Whenever an administrator sends a command, the plugin must invoke this callback.
+        """
+        pass
+
+    @abstractmethod
     async def notify_text(self, text: str) -> None:
-        """Sends a text notification to the game administrators' channel/address."""
+        """Sends a text notification/reply to the game administrators' channel/address."""
         pass
 
     @abstractmethod
@@ -65,6 +76,11 @@ class PlayerRegistry(ABC):
     @abstractmethod
     def is_player_registered(self, player_id: str) -> bool:
         """Returns True if the player is in the registry, False otherwise."""
+        pass
+
+    @abstractmethod
+    def reset_registry(self) -> None:
+        """Clears all players from the registry (memory and disk)."""
         pass
 
 class QRProvider(ABC):

@@ -1,7 +1,6 @@
 import asyncio
-from typing import Optional, Union
+from typing import Optional, Union, Callable
 from src.providers.yaml_config import YAMLConfigProvider
-from src.providers.json_registry import JSONPlayerRegistry
 from src.core.interfaces import PlayerMessagingService, AdminNotificationService
 from src.core.engine import ScavengerHuntEngine
 from src.core.utils import format_phone_number, calculate_parameter_hash
@@ -28,8 +27,14 @@ class MockPlayerMessaging(PlayerMessagingService):
         pass
 
 class MockAdminNotification(AdminNotificationService):
+    def __init__(self):
+        self._handler = None
+
     def initialize(self, config) -> None:
         pass
+
+    def set_inbound_handler(self, handler: Callable) -> None:
+        self._handler = handler
 
     async def notify_text(self, text: str) -> None:
         print(f"\n--- 📣 ADMIN NOTIFICATION LOG ---")
@@ -49,7 +54,7 @@ class MockAdminNotification(AdminNotificationService):
         pass
 
 async def main():
-    print("🤖 Scavenger Hunt Simulator (Hash-Based & Registry Gate) 🤖")
+    print("🤖 Scavenger Hunt Simulator (Hash-Based & Admin Commands) 🤖")
     print("=========================================================")
     print("Loading config/config.yml...")
     
@@ -58,6 +63,8 @@ async def main():
     admin_notification = MockAdminNotification()
     
     # Use a separate JSON registry for mock testing
+    player_registry = JSONPlayerRegistry = None
+    from src.providers.json_registry import JSONPlayerRegistry
     player_registry = JSONPlayerRegistry("data/active_players_mock.json")
     
     try:
@@ -97,13 +104,19 @@ async def main():
         print(f"       Command:  {loc_hash}")
     print("=========================================================\n")
 
-    print("Commands:")
-    print("  /start [param]  - Simulate player starting (e.g. '/start <token>')")
-    print("  /photo [id]     - Simulate player uploading photo (e.g. '/photo group_pic_1')")
-    print("  /help           - Show help instructions")
-    print("  /exit           - Exit simulator")
-    print("  [token]         - Send raw token/text")
-    print("=========================================\n")
+    print("Simulator Commands:")
+    print("  /start [param]       - Simulate player starting (e.g. '/start <token>')")
+    print("  /photo [id]          - Simulate player uploading photo (e.g. '/photo group_pic_1')")
+    print("  /help                - Show help instructions for players")
+    print("  /exit                - Exit simulator")
+    print("  /admin help          - Simulate admin requesting help")
+    print("  /admin reset         - Simulate admin wiping player registry")
+    print("  /admin generate <id> - Simulate admin creating start link for a player")
+    print("  /admin [text]        - Simulate admin sending general command text")
+    print("  [token]              - Send raw token/text as player")
+    print("=========================================================\n")
+
+    admin_address = "admin_channel_or_number"
 
     while True:
         try:
@@ -118,6 +131,11 @@ async def main():
         if line == "/exit":
             print("Exiting simulator.")
             break
+        elif line.startswith("/admin"):
+            parts = line.split(" ", 1)
+            cmd = parts[1].strip() if len(parts) > 1 else ""
+            if admin_notification._handler:
+                await admin_notification._handler(admin_address, cmd)
         elif line == "/help":
             if player_messaging._handler:
                 await player_messaging._handler(player_address, "help", None)

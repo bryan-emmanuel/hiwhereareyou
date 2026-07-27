@@ -20,8 +20,9 @@ class ScavengerHuntEngine:
         self.player_registry = player_registry
         self._config: Optional[GameConfig] = None
         
-        # Wire SPI inbound callback
+        # Wire SPI inbound callbacks
         self.player_messaging.set_inbound_handler(self.handle_player_message)
+        self.admin_notification.set_inbound_handler(self.handle_admin_message)
 
     @property
     def config(self) -> GameConfig:
@@ -30,6 +31,7 @@ class ScavengerHuntEngine:
         return self._config
 
     def reload_config(self) -> None:
+        """Forces reloading the configuration."""
         self._config = self.config_provider.get_game_config()
 
     def _get_standardized_player_id(self, sender_address: str) -> str:
@@ -130,3 +132,72 @@ class ScavengerHuntEngine:
             
             # Send completion notification to admins
             await self.admin_notification.notify_text(f"🏁 Player/Group {player_id} has completed the scavenger hunt!")
+
+    async def handle_admin_message(self, sender_address: str, text: str) -> None:
+        """
+        Main inbound admin command callback.
+        """
+        config = self.config
+        cleaned_text = text.strip()
+        
+        # Support slash-prefixed commands (e.g. /help -> help)
+        if cleaned_text.startswith("/"):
+            cleaned_text = cleaned_text[1:]
+
+        parts = cleaned_text.split(None, 1)
+        command = parts[0].lower() if parts else ""
+        args = parts[1].strip() if len(parts) > 1 else ""
+
+        logger.info(f"Inbound admin command from '{sender_address}': command='{command}', args='{args}'")
+
+        if command == "help":
+            help_msg = (
+                "🛠 *Administrator Functions:*\n\n"
+                "• `help` - Show this list of functions.\n"
+                "• `generate <Player ID>` - Generate start token and links for a player (e.g. `generate +15551234567` or `generate @username`).\n"
+                "• `reset` - Reset the active players registry, clearing all registered players."
+            )
+            await self.admin_notification.notify_text(help_msg)
+            return
+
+        elif command == "reset":
+            try:
+                self.player_registry.reset_registry()
+                logger.info("Admin triggered registry reset.")
+                await self.admin_notification.notify_text("🧹 *Registry Reset Successful.*\nAll registered players have been cleared from memory and disk.")
+            except Exception as e:
+                logger.error(f"Error resetting registry: {e}")
+                await self.admin_notification.notify_text("❌ *Failed to reset registry.* Check application logs.")
+            return
+
+        elif command == "generate":
+            if not args:
+                await self.admin_notification.notify_text("⚠️ *Usage:* `generate <Player ID>` (e.g., `generate +15551234567` or `generate username`)")
+                return
+
+            player_id = args
+            # Standardize if phone number
+            if player_id.startswith("+") or player_id.isdigit() or ("-" in player_id) or ("(" in player_id):
+                try:
+                    player_id = format_phone_number(player_id)
+                except Exception:
+                    pass
+
+            start_token = calculate_parameter_hash(config.salt, config.start_param, player_id)
+            tg_link = f"https://t.me/{config.telegram_bot_username}?start={start_token}"
+            twilio_link = f"sms:{config.twilio_phone_number}?body={start_token}"
+
+            resp = (
+                f"👤 *Player ID:* `{player_id}`\n"
+                f"🔑 *Start Token:* `{start_token}`\n\n"
+                f"📱 *Telegram Start:* {tg_link}\n"
+                f"📱 *Twilio SMS Start:* `{twilio_link}`"
+            )
+            await self.admin_notification.notify_text(resp)
+            return
+
+        else:
+            await self.admin_notification.notify_text(
+                "⚠️ Unrecognized command. Type `help` to see a list of administrator functions."
+            )
+            return

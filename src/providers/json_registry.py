@@ -56,3 +56,9 @@ class JSONPlayerRegistry(PlayerRegistry):
     def is_player_registered(self, player_id: str) -> bool:
         with self._lock:
             return player_id in self._players
+
+    def reset_registry(self) -> None:
+        with self._lock:
+            self._players.clear()
+            self._save_registry_unlocked()
+            logger.info("Player registry cleared successfully.")
