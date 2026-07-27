@@ -22,12 +22,6 @@ class GameConfig:
     twilio_webhook_host: str
     twilio_webhook_port: int
     
-    # Redirection server parameters
-    salt: str
-    redirect_host: str
-    redirect_port: int
-    redirect_base_url: str
-    
     # Core Game logic parameters
     start_param: str
     start_message: str

@@ -2,7 +2,7 @@ import logging
 from typing import Optional, Union
 from src.core.interfaces import ConfigProvider, PlayerMessagingService, AdminNotificationService, PlayerRegistry
 from src.core.models import GameConfig
-from src.core.utils import format_phone_number, calculate_parameter_hash
+from src.core.utils import format_phone_number
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,8 @@ class ScavengerHuntEngine:
 
     async def handle_player_message(self, sender_address: str, text: str, media_identifier: Optional[str] = None) -> None:
         """
-        Main inbound player message callback. Invalid inputs are ignored outright.
+        Main inbound player message callback. Handles direct plaintext commands for registered players.
+        Unregistered players or invalid messages are ignored outright.
         """
         config = self.config
         player_id = self._get_standardized_player_id(sender_address)
@@ -55,13 +56,13 @@ class ScavengerHuntEngine:
 
         logger.info(f"Inbound message from '{sender_address}' (Standardized ID: '{player_id}'): text='{cleaned_text}', media='{media_identifier}'")
 
-        # 1. Check if the player sent a photo
-        if media_identifier:
-            # Player must be active to submit photos. If not active, ignore outright.
-            if not self.player_registry.is_player_registered(player_id):
-                logger.info(f"Ignored photo submission from unregistered player {player_id}")
-                return
+        # 1. Gated check: If player ID is not registered, ignore the message outright
+        if not self.player_registry.is_player_registered(player_id):
+            logger.info(f"Ignored message/media from unregistered player {player_id}")
+            return
 
+        # 2. Check if the player sent a photo
+        if media_identifier:
             logger.info(f"Forwarding photo submission from registered player {player_id} to admins")
             caption = f"📸 Photo submission from registered player/group {player_id}."
             await self.admin_notification.notify_media(media_identifier, caption)
@@ -72,17 +73,12 @@ class ScavengerHuntEngine:
             )
             return
 
-        # 2. Check for empty inputs (ignore outright)
+        # 3. Check for empty inputs (ignore outright)
         if not cleaned_text:
             return
 
-        # 3. Check if input matches the start seed hash
-        start_hash = calculate_parameter_hash(config.salt, config.start_param, player_id)
-        if cleaned_text == start_hash:
-            # Register the player
-            self.player_registry.register_player(player_id)
-            logger.info(f"Registered new active player: {player_id}")
-
+        # 4. Check if input matches the start parameter
+        if cleaned_text.lower() == config.start_param.lower():
             if not config.locations:
                 return
 
@@ -91,22 +87,16 @@ class ScavengerHuntEngine:
             await self.player_messaging.send_message(sender_address, msg)
             return
 
-        # 4. Gated verification check for registered players only (ignore unregistered text outright)
-        if not self.player_registry.is_player_registered(player_id):
-            logger.info(f"Ignored message from unregistered player {player_id}: '{cleaned_text}'")
-            return
-
-        # 5. Check if the parameter matches any location hash
+        # 5. Check if the input text matches any location ID directly
         location_idx = -1
         for idx, loc in enumerate(config.locations):
-            loc_hash = calculate_parameter_hash(config.salt, loc.id, player_id)
-            if cleaned_text == loc_hash:
+            if cleaned_text.lower() == loc.id.lower():
                 location_idx = idx
                 break
 
-        # If it doesn't match any location hash, ignore outright
+        # If it doesn't match any location ID, ignore outright
         if location_idx == -1:
-            logger.info(f"Ignored invalid token/message from registered player {player_id}: '{cleaned_text}'")
+            logger.info(f"Ignored invalid command/message from registered player {player_id}: '{cleaned_text}'")
             return
 
         solved_location = config.locations[location_idx]
@@ -137,7 +127,6 @@ class ScavengerHuntEngine:
         """
         Main inbound admin command callback.
         """
-        config = self.config
         cleaned_text = text.strip()
         
         # Support slash-prefixed commands (e.g. /help -> help)
@@ -154,7 +143,7 @@ class ScavengerHuntEngine:
             help_msg = (
                 "🛠 *Administrator Functions:*\n\n"
                 "• `help` - Show this list of functions.\n"
-                "• `generate <Player ID>` - Generate start token and links for a player (e.g. `generate +15551234567` or `generate @username`).\n"
+                "• `generate <Player ID>` - Register a player's phone number or Telegram ID (e.g. `generate +15551234567` or `generate @username`).\n"
                 "• `reset` - Reset the active players registry, clearing all registered players."
             )
             await self.admin_notification.notify_text(help_msg)
@@ -183,17 +172,11 @@ class ScavengerHuntEngine:
                 except Exception:
                     pass
 
-            start_token = calculate_parameter_hash(config.salt, config.start_param, player_id)
-            tg_link = f"https://t.me/{config.telegram_bot_username}?start={start_token}"
-            twilio_link = f"sms:{config.twilio_phone_number}?body={start_token}"
-
-            resp = (
-                f"👤 *Player ID:* `{player_id}`\n"
-                f"🔑 *Start Token:* `{start_token}`\n\n"
-                f"📱 *Telegram Start:* {tg_link}\n"
-                f"📱 *Twilio SMS Start:* `{twilio_link}`"
-            )
-            await self.admin_notification.notify_text(resp)
+            # Register the player directly in the active registry database
+            self.player_registry.register_player(player_id)
+            
+            # Simple confirmation of the successful registration
+            await self.admin_notification.notify_text(f"👤 Player/Group {player_id} registered successfully!")
             return
 
         else:
