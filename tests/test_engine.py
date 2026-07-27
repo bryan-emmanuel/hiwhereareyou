@@ -220,3 +220,73 @@ async def test_photo_submission_gating(sample_config):
     assert admin_notification.sent_media[0][0] == "photo_url_abc"
     assert len(player_messaging.sent_messages) == 1
     assert "*Photo received!*" in player_messaging.sent_messages[0][1]
+
+@pytest.mark.asyncio
+async def test_admin_locations_command(sample_config):
+    config_provider = MockConfigProvider(sample_config)
+    player_messaging = MockPlayerMessaging()
+    admin_notification = MockAdminNotification()
+    player_registry = MockPlayerRegistry()
+    engine = ScavengerHuntEngine(config_provider, player_messaging, admin_notification, player_registry)
+
+    await admin_notification._handler("admin_chat", "locations")
+
+    assert len(admin_notification.sent_logs) == 1
+    reply = admin_notification.sent_logs[0]
+    # Should list all three locations with IDs, clues, and links
+    assert "Game Locations" in reply
+    assert "loc1_abc" in reply
+    assert "Location One" in reply
+    assert "Solve clue one" in reply
+    assert "loc2_def" in reply
+    assert "loc3_ghi" in reply
+    # Should contain shareable links
+    assert "https://t.me/test_telegram_bot?start=loc1_abc" in reply
+    assert "sms:+15551111?body=loc1_abc" in reply
+
+@pytest.mark.asyncio
+async def test_admin_test_command_mid_location(sample_config):
+    config_provider = MockConfigProvider(sample_config)
+    player_messaging = MockPlayerMessaging()
+    admin_notification = MockAdminNotification()
+    player_registry = MockPlayerRegistry()
+    engine = ScavengerHuntEngine(config_provider, player_messaging, admin_notification, player_registry)
+
+    await admin_notification._handler("admin_chat", "test loc1_abc")
+
+    assert len(admin_notification.sent_logs) == 1
+    reply = admin_notification.sent_logs[0]
+    assert "Test Result" in reply
+    assert "*Location Found:* Location One" in reply
+    assert "Solve clue two" in reply
+
+@pytest.mark.asyncio
+async def test_admin_test_command_final_location(sample_config):
+    config_provider = MockConfigProvider(sample_config)
+    player_messaging = MockPlayerMessaging()
+    admin_notification = MockAdminNotification()
+    player_registry = MockPlayerRegistry()
+    engine = ScavengerHuntEngine(config_provider, player_messaging, admin_notification, player_registry)
+
+    await admin_notification._handler("admin_chat", "test loc3_ghi")
+
+    assert len(admin_notification.sent_logs) == 1
+    reply = admin_notification.sent_logs[0]
+    assert "Test Result" in reply
+    assert "*Final Location Found:* Location Three" in reply
+    assert "You finished the hunt!" in reply
+
+@pytest.mark.asyncio
+async def test_admin_test_command_invalid_message(sample_config):
+    config_provider = MockConfigProvider(sample_config)
+    player_messaging = MockPlayerMessaging()
+    admin_notification = MockAdminNotification()
+    player_registry = MockPlayerRegistry()
+    engine = ScavengerHuntEngine(config_provider, player_messaging, admin_notification, player_registry)
+
+    await admin_notification._handler("admin_chat", "test bogus_location")
+
+    assert len(admin_notification.sent_logs) == 1
+    reply = admin_notification.sent_logs[0]
+    assert "Test Result" in reply
+    assert "would be ignored" in reply
