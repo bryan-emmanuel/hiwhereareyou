@@ -56,6 +56,17 @@ class AdminNotificationService(ABC):
         """Disconnects the admin notification client."""
         pass
 
+class PlayerRegistry(ABC):
+    @abstractmethod
+    def register_player(self, player_id: str) -> None:
+        """Saves a player ID to the registry (in memory and persisted to disk)."""
+        pass
+
+    @abstractmethod
+    def is_player_registered(self, player_id: str) -> bool:
+        """Returns True if the player is in the registry, False otherwise."""
+        pass
+
 class QRProvider(ABC):
     @abstractmethod
     def generate_qr_code(self, data: str) -> bytes:

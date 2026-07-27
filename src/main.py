@@ -3,6 +3,8 @@ import sys
 import asyncio
 import logging
 from src.providers.yaml_config import YAMLConfigProvider
+from src.providers.json_registry import JSONPlayerRegistry
+from src.providers.redirect_server import RedirectServer
 from src.core.engine import ScavengerHuntEngine
 
 # Setup logging
@@ -51,18 +53,29 @@ async def async_main():
     admin_notification = AdminNotificationClass()
     admin_notification.initialize(config)
 
-    # 2. Instantiate and wire the core engine
-    logger.info("Initializing game core engine...")
-    engine = ScavengerHuntEngine(config_provider, player_messaging, admin_notification)
+    # 2. Instantiate the disk-backed active players registry
+    registry_path = os.environ.get("SCAVENGER_REGISTRY_PATH", "data/active_players.json")
+    logger.info(f"Loading player registry from: {registry_path}")
+    player_registry = JSONPlayerRegistry(registry_path)
 
-    # 3. Start services
-    logger.info("Starting player messaging and admin notifications...")
+    # 3. Instantiate and wire the core engine
+    logger.info("Initializing game core engine...")
+    engine = ScavengerHuntEngine(config_provider, player_messaging, admin_notification, player_registry)
+
+    # 4. Instantiate the redirect web server
+    platform_name = "telegram" if "Telegram" in PlayerMessagingClass.__name__ else "twilio"
+    logger.info(f"Initializing Redirection Web Server for platform '{platform_name.upper()}'...")
+    redirect_server = RedirectServer(config, platform_name)
+
+    # 5. Start services
+    logger.info("Starting player messaging, admin notifications, and redirect server...")
     await player_messaging.start()
     await admin_notification.start()
+    await redirect_server.start()
     
-    logger.info("🎉 Scavenger Hunt Bot is active and running!")
+    logger.info("🎉 Scavenger Hunt system is active and running!")
     
-    # 4. Wait for termination signal
+    # 6. Wait for termination signal
     try:
         while True:
             await asyncio.sleep(3600)
@@ -70,6 +83,7 @@ async def async_main():
         logger.info("Termination signal received. Shutting down services...")
         await player_messaging.stop()
         await admin_notification.stop()
+        await redirect_server.stop()
 
 
 def main():

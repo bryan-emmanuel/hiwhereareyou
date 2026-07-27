@@ -1,20 +1,20 @@
-# 📱 Telegram & Twilio Scavenger Hunt Game Bot
+# 📱 Secure Scavenger Hunt Telegram & Twilio Bot
 
-A Python-based, fully stateless Scavenger Hunt game utilizing a strict **Service Provider Interface (SPI) / Dual Black Box** architecture. The player communication layer and game administration notifications are completely separated.
+A Python-based, fully stateless Scavenger Hunt game utilizing a strict **Service Provider Interface (SPI) / Dual Black Box** architecture. Progression is secured with player-specific hash verification and an active player registry.
 
 ## Features
 
 - **Decoupled Architecture (Dual SPI)**:
   - `PlayerMessagingService`: Manages player input and output.
   - `AdminNotificationService`: Manages admin logging, alerts, and photo forwarding.
-- **Platform Agnostic Plugins**:
-  - **Telegram Bot**: Support for deep linking (`https://t.me/` URLs) and private channels.
-  - **Twilio SMS/MMS**: Support for native messaging. Includes an internal async HTTP webhook server to receive texts and MMS media, plus automated markdown-to-plaintext conversion for standard SMS.
-- **Build-Time Wiring**: Selected plugins are bound to the SPI interfaces at build time inside `src/main.py`.
-- **100% Stateless**: Game progression is driven by scanned QR parameters. No persistent player databases are needed.
-- **Cheat Prevention**: Locations use unique unguessable suffixes (e.g. `fountain_8f2a`) to prevent players from skipping steps.
-- **Offline QR Code Generator**: Generates both web-based `https://` links (for Telegram) and native `sms:` URIs (which pre-fill the SMS body for Twilio).
-- **Interactive Terminal Simulator**: Run the game engine directly in your command line without requiring external API keys.
+  - `PlayerRegistry`: Manages the active players registry.
+- **Active Players Registry**: Only players who register via the valid starting token are permitted to progress. Gated access is disk-backed (`data/active_players.json`) and kept in-memory for instant verification.
+- **Anti-Abuse Hash Progression**: Progression tokens are computed as a player-specific hash:
+  $$\text{token} = \text{SHA256}(\text{salt} + \text{location\_id} + \text{player\_id})[:16]$$
+  This prevents link sharing and skipping (Player B cannot use Player A's link).
+- **QR Redirect Web Server**: Physical QR codes point to a browser form at `http://<domain>/scan/location_id`. The page prompts players for their ID, calculates the token using the secret salt, and automatically redirects them to the native chat app with the token prefilled.
+- **Shared Utilities**: Includes a phone number standardizer utility to format numbers to E.164 (e.g. `+15551234567`).
+- **Interactive Terminal Simulator**: Run the game engine directly in your command line with pre-computed tokens printed out.
 
 ---
 
@@ -24,17 +24,23 @@ A Python-based, fully stateless Scavenger Hunt game utilizing a strict **Service
 scavenger_hunt/
 │
 ├── config/
-│   └── config.yml           # Clues, locations, and environment settings
+│   └── config.yml           # Clues, locations, salt, and redirection settings
+│
+├── data/
+│   └── active_players.json  # Persistent player registry (auto-created)
 │
 ├── src/
 │   ├── core/                # Core Business Logic (Platform-independent)
-│   │   ├── interfaces.py    # SPI definitions (Player & Admin Messaging, Config, QR)
-│   │   ├── models.py        # Core domain dataclasses
-│   │   └── engine.py        # Stateless game engine & event router
+│   │   ├── interfaces.py    # SPI definitions
+│   │   ├── models.py        # Domain dataclasses
+│   │   ├── utils.py         # Phone formatter & hash generator
+│   │   └── engine.py        # Gated game engine & verification router
 │   │
 │   ├── providers/           # Shared concrete infrastructure
 │   │   ├── yaml_config.py   # Config parser
-│   │   └── qr_generator.py  # Image generator
+│   │   ├── qr_generator.py  # Image generator
+│   │   ├── json_registry.py # Thread-safe JSON player registry
+│   │   └── redirect_server.py # Redirection server (GET forms & POST redirects)
 │   │
 │   ├── plugins/             # SPI Messaging Plugins
 │   │   ├── telegram_plugin.py # Telegram player and admin plugins
@@ -42,14 +48,15 @@ scavenger_hunt/
 │   │
 │   ├── main.py              # Application entry point & build-time wiring
 │   ├── generate_qrs.py      # QR code generation utility
+│   ├── generate_start_param.py # Admin CLI tool to generate start links
 │   └── mock_runner.py       # Terminal game simulator
 │
 ├── tests/                   # Automated unit tests
-│   └── test_engine.py       # Dual-SPI test suite
+│   └── test_engine.py       # Hash-based validation test suite
 │
 ├── Dockerfile               # Build configuration
 ├── docker-compose.yml       # Orchestration config
-├── requirements.txt         # Dependencies (twilio, aiohttp, python-telegram-bot)
+├── requirements.txt         # Dependencies
 └── README.md                # This manual
 ```
 
@@ -72,13 +79,11 @@ pip install -r requirements.txt
 
 ### 2. Run the Terminal Simulator (No Bot Keys Needed!)
 
-Play-test the core game mechanics interactively in your command line:
+Play-test the core game mechanics interactively in your command line with pre-computed hashes:
 
 ```bash
 PYTHONPATH=. python3 src/mock_runner.py
 ```
-
-*Use `/start start` to begin, `/start fountain_8f2a` to simulate finding a location, and `/photo id` to send a group picture.*
 
 ### 3. Running Automated Tests
 
@@ -106,24 +111,29 @@ AdminNotificationClass = TelegramAdminNotification
 # AdminNotificationClass = TwilioAdminNotification
 ```
 
-Configure your API credentials in [config/config.yml](file:///Users/bryan/Documents/repository/hiwhereareyou/config/config.yml).
+Configure your API credentials, secret salt, and redirect server settings in [config/config.yml](file:///Users/bryan/Documents/repository/hiwhereareyou/config/config.yml).
 
 ---
 
 ## 🖼 Generating QR Codes
 
-Generate QR codes formatted specifically for your chosen player platform:
+Generate QR codes pointing to your redirect server. Ensure `game.redirect_base_url` in `config.yml` is set to your server's public domain:
 
-### For Telegram (`https://t.me/` URLs):
 ```bash
-PYTHONPATH=. python3 src/generate_qrs.py --platform telegram --outdir qrs
+PYTHONPATH=. python3 src/generate_qrs.py --outdir qrs
 ```
+*This generates PNG images inside the `qrs/` directory. Each image points to `http://<domain>/scan/location_id` (or `start` for the seed).*
 
-### For Twilio SMS (`sms:` deep-links):
+---
+
+## 👤 Admin Tools: Generating Start Links
+
+Organizers can generate start tokens and deep links for new players:
+
 ```bash
-PYTHONPATH=. python3 src/generate_qrs.py --platform twilio --outdir qrs
+PYTHONPATH=. python3 src/generate_start_param.py +15551234567 --platform twilio
 ```
-*Note: The native Twilio QR code uses the `sms:+15551234567?body=fountain_8f2a` URI. When scanned, it automatically opens the phone's native messaging app, pre-fills the recipient as the Twilio number, and pre-fills the message body with the code.*
+*(Optionally change `--platform` to `telegram` for Telegram start links).*
 
 ---
 
@@ -140,4 +150,4 @@ In Termux, install Python and dependencies, configure `config.yml`, set the buil
 ```bash
 PYTHONPATH=. python src/main.py
 ```
-*(If running Twilio on Termux, you can use a tool like `ngrok` inside Termux to expose port `5000` to the internet so Twilio can send webhooks to your phone).*
+*(If running Twilio on Termux, you can use a tool like `ngrok` inside Termux to expose port `8080` (redirect server) and `5000` (twilio webhook) to the internet).*

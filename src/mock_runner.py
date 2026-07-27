@@ -1,8 +1,10 @@
 import asyncio
 from typing import Optional, Union
 from src.providers.yaml_config import YAMLConfigProvider
+from src.providers.json_registry import JSONPlayerRegistry
 from src.core.interfaces import PlayerMessagingService, AdminNotificationService
 from src.core.engine import ScavengerHuntEngine
+from src.core.utils import format_phone_number, calculate_parameter_hash
 
 class MockPlayerMessaging(PlayerMessagingService):
     def __init__(self):
@@ -47,30 +49,61 @@ class MockAdminNotification(AdminNotificationService):
         pass
 
 async def main():
-    print("🤖 Scavenger Hunt Simulator (Dual SPI) 🤖")
-    print("=======================================")
+    print("🤖 Scavenger Hunt Simulator (Hash-Based & Registry Gate) 🤖")
+    print("=========================================================")
     print("Loading config/config.yml...")
     
     config_provider = YAMLConfigProvider("config/config.yml")
     player_messaging = MockPlayerMessaging()
     admin_notification = MockAdminNotification()
     
+    # Use a separate JSON registry for mock testing
+    player_registry = JSONPlayerRegistry("data/active_players_mock.json")
+    
     try:
-        engine = ScavengerHuntEngine(config_provider, player_messaging, admin_notification)
+        engine = ScavengerHuntEngine(config_provider, player_messaging, admin_notification, player_registry)
         config = engine.config
     except Exception as e:
         print(f"❌ Error loading config: {e}")
         return
 
-    print("Game loaded! Commands:")
-    print("  /start [param]  - Simulate player scanning QR code (e.g. '/start start', '/start fountain_8f2a')")
-    print("  /photo [id]     - Simulate player uploading photo (e.g. '/photo group_pic_1')")
-    print("  /help           - Show game help instructions")
-    print("  /exit           - Exit simulator")
-    print("  [any other text] - Send raw text input as player")
-    print("=======================================")
+    # Prompt for Player ID to pre-generate hashes
+    player_address = input("Enter mock player ID (e.g. +15559999 or username) [default: +15559999]: ").strip()
+    if not player_address:
+        player_address = "+15559999"
 
-    player_address = "+15559999"  # Mock phone number / chat ID
+    # Standardize player ID
+    player_id = player_address
+    if player_id.startswith("+") or player_id.isdigit() or ("-" in player_id) or ("(" in player_id):
+        try:
+            player_id = format_phone_number(player_id)
+            print(f"📞 Standardized Player ID: {player_id}")
+        except Exception:
+            pass
+
+    # Print out pre-computed tokens for mock testing
+    print("\n=========================================================")
+    print("🔑 PRE-COMPUTED HASH TOKENS FOR THIS PLAYER ID")
+    print("=========================================================")
+    
+    start_hash = calculate_parameter_hash(config.salt, config.start_param, player_id)
+    print(f"1. Start Token (simulates scanning seed QR):")
+    print(f"   Command:  /start {start_hash}")
+    
+    print("\n2. Location Tokens (simulates scanning location QRs):")
+    for idx, loc in enumerate(config.locations, 1):
+        loc_hash = calculate_parameter_hash(config.salt, loc.id, player_id)
+        print(f"   [{idx}] {loc.name} (ID: {loc.id}):")
+        print(f"       Command:  {loc_hash}")
+    print("=========================================================\n")
+
+    print("Commands:")
+    print("  /start [param]  - Simulate player starting (e.g. '/start <token>')")
+    print("  /photo [id]     - Simulate player uploading photo (e.g. '/photo group_pic_1')")
+    print("  /help           - Show help instructions")
+    print("  /exit           - Exit simulator")
+    print("  [token]         - Send raw token/text")
+    print("=========================================\n")
 
     while True:
         try:

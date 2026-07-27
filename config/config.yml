@@ -14,9 +14,21 @@ twilio:
   webhook_port: 5000
 
 game:
+  # Salt string used to compute player-specific progression hashes (MUST remain secret!)
+  salt: "scavenger_hunt_secret_salt_2026_xyz"
+  
+  # Configuration for the browser redirect web server
+  redirect_host: "0.0.0.0"
+  redirect_port: 8080
+  # Base URL of the redirect server accessible by players (used by QR generator)
+  redirect_base_url: "http://localhost:8080"
+  
   start_param: "start"
   start_message: |
     🎉 *Welcome to the Scavenger Hunt!* 🎉
+    
+    Your Player ID is: `{player_id}`
+    Keep this ID safe! You will need to enter it when scanning location QR codes to unlock clues.
     
     Here is your first clue:
     🔍 _{clue}_
