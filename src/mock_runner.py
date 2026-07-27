@@ -3,7 +3,7 @@ from typing import Optional, Union, Callable
 from src.providers.yaml_config import YAMLConfigProvider
 from src.core.interfaces import PlayerMessagingService, AdminNotificationService
 from src.core.engine import ScavengerHuntEngine
-from src.core.utils import format_phone_number, calculate_parameter_hash
+from src.core.utils import format_phone_number
 
 class MockPlayerMessaging(PlayerMessagingService):
     def __init__(self):
@@ -54,7 +54,7 @@ class MockAdminNotification(AdminNotificationService):
         pass
 
 async def main():
-    print("🤖 Scavenger Hunt Simulator (Hash-Based & Admin Commands) 🤖")
+    print("🤖 Scavenger Hunt Simulator (Direct Registration Flow) 🤖")
     print("=========================================================")
     print("Loading config/config.yml...")
     
@@ -62,8 +62,6 @@ async def main():
     player_messaging = MockPlayerMessaging()
     admin_notification = MockAdminNotification()
     
-    # Use a separate JSON registry for mock testing
-    player_registry = JSONPlayerRegistry = None
     from src.providers.json_registry import JSONPlayerRegistry
     player_registry = JSONPlayerRegistry("data/active_players_mock.json")
     
@@ -74,7 +72,7 @@ async def main():
         print(f"❌ Error loading config: {e}")
         return
 
-    # Prompt for Player ID to pre-generate hashes
+    # Prompt for Player ID
     player_address = input("Enter mock player ID (e.g. +15559999 or username) [default: +15559999]: ").strip()
     if not player_address:
         player_address = "+15559999"
@@ -88,32 +86,25 @@ async def main():
         except Exception:
             pass
 
-    # Print out pre-computed tokens for mock testing
     print("\n=========================================================")
-    print("🔑 PRE-COMPUTED HASH TOKENS FOR THIS PLAYER ID")
+    print("📍 PLAIN TEXT COMMANDS FOR THIS SIMULATOR")
     print("=========================================================")
-    
-    start_hash = calculate_parameter_hash(config.salt, config.start_param, player_id)
-    print(f"1. Start Token (simulates scanning seed QR):")
-    print(f"   Command:  /start {start_hash}")
-    
-    print("\n2. Location Tokens (simulates scanning location QRs):")
+    print(f"1. Start Command:      {config.start_param}")
+    print("\n2. Location Scan codes:")
     for idx, loc in enumerate(config.locations, 1):
-        loc_hash = calculate_parameter_hash(config.salt, loc.id, player_id)
-        print(f"   [{idx}] {loc.name} (ID: {loc.id}):")
-        print(f"       Command:  {loc_hash}")
+        print(f"   [{idx}] {loc.name}: {loc.id}")
     print("=========================================================\n")
 
     print("Simulator Commands:")
-    print("  /start [param]       - Simulate player starting (e.g. '/start <token>')")
+    print("  /start [param]       - Simulate player starting (e.g. '/start start')")
     print("  /photo [id]          - Simulate player uploading photo (e.g. '/photo group_pic_1')")
     print("  /help                - Show help instructions for players")
     print("  /exit                - Exit simulator")
     print("  /admin help          - Simulate admin requesting help")
     print("  /admin reset         - Simulate admin wiping player registry")
-    print("  /admin generate <id> - Simulate admin creating start link for a player")
+    print("  /admin generate <id> - Simulate admin registering a player ID (e.g. '/admin generate +15559999')")
     print("  /admin [text]        - Simulate admin sending general command text")
-    print("  [token]              - Send raw token/text as player")
+    print("  [text]               - Send raw text as player")
     print("=========================================================\n")
 
     admin_address = "admin_channel_or_number"

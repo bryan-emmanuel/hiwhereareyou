@@ -4,7 +4,6 @@ import asyncio
 import logging
 from src.providers.yaml_config import YAMLConfigProvider
 from src.providers.json_registry import JSONPlayerRegistry
-from src.providers.redirect_server import RedirectServer
 from src.core.engine import ScavengerHuntEngine
 
 # Setup logging
@@ -62,20 +61,14 @@ async def async_main():
     logger.info("Initializing game core engine...")
     engine = ScavengerHuntEngine(config_provider, player_messaging, admin_notification, player_registry)
 
-    # 4. Instantiate the redirect web server
-    platform_name = "telegram" if "Telegram" in PlayerMessagingClass.__name__ else "twilio"
-    logger.info(f"Initializing Redirection Web Server for platform '{platform_name.upper()}'...")
-    redirect_server = RedirectServer(config, platform_name)
-
-    # 5. Start services
-    logger.info("Starting player messaging, admin notifications, and redirect server...")
+    # 4. Start services
+    logger.info("Starting player messaging and admin notifications...")
     await player_messaging.start()
     await admin_notification.start()
-    await redirect_server.start()
     
     logger.info("🎉 Scavenger Hunt system is active and running!")
     
-    # 6. Wait for termination signal
+    # 5. Wait for termination signal
     try:
         while True:
             await asyncio.sleep(3600)
@@ -83,7 +76,6 @@ async def async_main():
         logger.info("Termination signal received. Shutting down services...")
         await player_messaging.stop()
         await admin_notification.stop()
-        await redirect_server.stop()
 
 
 def main():

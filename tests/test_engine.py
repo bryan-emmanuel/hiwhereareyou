@@ -3,7 +3,6 @@ from typing import List, Tuple, Union, Optional, Callable
 from src.core.interfaces import ConfigProvider, PlayerMessagingService, AdminNotificationService, PlayerRegistry
 from src.core.models import GameConfig, Location
 from src.core.engine import ScavengerHuntEngine
-from src.core.utils import calculate_parameter_hash
 
 class MockConfigProvider(ConfigProvider):
     def __init__(self, config: GameConfig):
@@ -77,10 +76,6 @@ def sample_config() -> GameConfig:
         twilio_admin_phone_number="+15552222",
         twilio_webhook_host="0.0.0.0",
         twilio_webhook_port=5000,
-        salt="test_salt_key_123",
-        redirect_host="0.0.0.0",
-        redirect_port=8080,
-        redirect_base_url="http://localhost:8080",
         start_param="start",
         start_message="Welcome! First Clue: {clue}",
         final_message="You finished the hunt!",
@@ -100,15 +95,33 @@ async def test_location_solve_unregistered_fails(sample_config):
     engine = ScavengerHuntEngine(config_provider, player_messaging, admin_notification, player_registry)
 
     player_address = "+15559999"
-    loc1_hash = calculate_parameter_hash(sample_config.salt, "loc1_abc", "+15559999")
-    
-    await player_messaging._handler(player_address, loc1_hash)
+    # Unregistered player tries to scan Location 1 directly
+    await player_messaging._handler(player_address, "loc1_abc")
 
+    # Output message should be ignored outright (no message sent)
     assert len(player_messaging.sent_messages) == 0
     assert not player_registry.is_player_registered("+15559999")
 
 @pytest.mark.asyncio
-async def test_start_command_registers_player(sample_config):
+async def test_admin_generate_registers_and_confirms(sample_config):
+    config_provider = MockConfigProvider(sample_config)
+    player_messaging = MockPlayerMessaging()
+    admin_notification = MockAdminNotification()
+    player_registry = MockPlayerRegistry()
+    engine = ScavengerHuntEngine(config_provider, player_messaging, admin_notification, player_registry)
+
+    # Admin registers a player
+    await admin_notification._handler("admin_chat", "generate +15559999")
+
+    # Verify player registered
+    assert player_registry.is_player_registered("+15559999")
+    
+    # Simple confirmation reply back to admin
+    assert len(admin_notification.sent_logs) == 1
+    assert "Player/Group +15559999 registered successfully!" in admin_notification.sent_logs[0]
+
+@pytest.mark.asyncio
+async def test_registered_player_starts_game(sample_config):
     config_provider = MockConfigProvider(sample_config)
     player_messaging = MockPlayerMessaging()
     admin_notification = MockAdminNotification()
@@ -116,11 +129,11 @@ async def test_start_command_registers_player(sample_config):
     engine = ScavengerHuntEngine(config_provider, player_messaging, admin_notification, player_registry)
 
     player_address = "+15559999"
-    start_hash = calculate_parameter_hash(sample_config.salt, "start", "+15559999")
+    player_registry.register_player("+15559999")
 
-    await player_messaging._handler(player_address, start_hash)
+    # Registered player starts
+    await player_messaging._handler(player_address, "start")
 
-    assert player_registry.is_player_registered("+15559999")
     assert len(player_messaging.sent_messages) == 1
     assert "Welcome! First Clue: Solve clue one" in player_messaging.sent_messages[0][1]
 
@@ -135,11 +148,28 @@ async def test_location_solve_registered_player(sample_config):
     player_address = "+15559999"
     player_registry.register_player("+15559999")
 
-    loc1_hash = calculate_parameter_hash(sample_config.salt, "loc1_abc", "+15559999")
-    await player_messaging._handler(player_address, loc1_hash)
+    # Solve Location 1
+    await player_messaging._handler(player_address, "loc1_abc")
 
     assert len(player_messaging.sent_messages) == 1
     assert "*Location Found:* Location One" in player_messaging.sent_messages[0][1]
+    assert "Solve clue two" in player_messaging.sent_messages[0][1]
+
+@pytest.mark.asyncio
+async def test_invalid_location_solve_ignored(sample_config):
+    config_provider = MockConfigProvider(sample_config)
+    player_messaging = MockPlayerMessaging()
+    admin_notification = MockAdminNotification()
+    player_registry = MockPlayerRegistry()
+    engine = ScavengerHuntEngine(config_provider, player_messaging, admin_notification, player_registry)
+
+    player_address = "+15559999"
+    player_registry.register_player("+15559999")
+
+    # Send incorrect code
+    await player_messaging._handler(player_address, "loc1_wrong")
+
+    assert len(player_messaging.sent_messages) == 0
 
 @pytest.mark.asyncio
 async def test_admin_help_command(sample_config):
@@ -149,30 +179,10 @@ async def test_admin_help_command(sample_config):
     player_registry = MockPlayerRegistry()
     engine = ScavengerHuntEngine(config_provider, player_messaging, admin_notification, player_registry)
 
-    # Simulate admin sending /help or help
     await admin_notification._handler("admin_chat", "help")
 
     assert len(admin_notification.sent_logs) == 1
     assert "Administrator Functions" in admin_notification.sent_logs[0]
-
-@pytest.mark.asyncio
-async def test_admin_generate_command(sample_config):
-    config_provider = MockConfigProvider(sample_config)
-    player_messaging = MockPlayerMessaging()
-    admin_notification = MockAdminNotification()
-    player_registry = MockPlayerRegistry()
-    engine = ScavengerHuntEngine(config_provider, player_messaging, admin_notification, player_registry)
-
-    # Simulate admin generating token for a phone number
-    await admin_notification._handler("admin_chat", "generate (555) 999-9999")
-
-    assert len(admin_notification.sent_logs) == 1
-    resp = admin_notification.sent_logs[0]
-    assert "+15559999999" in resp  # Standardized player ID
-    
-    # Precompute correct hash for phone number
-    expected_hash = calculate_parameter_hash(sample_config.salt, "start", "+15559999999")
-    assert expected_hash in resp
 
 @pytest.mark.asyncio
 async def test_admin_reset_command(sample_config):
@@ -182,14 +192,11 @@ async def test_admin_reset_command(sample_config):
     player_registry = MockPlayerRegistry()
     engine = ScavengerHuntEngine(config_provider, player_messaging, admin_notification, player_registry)
 
-    # Pre-register some active players
     player_registry.register_player("+15559999")
     assert player_registry.is_player_registered("+15559999")
 
-    # Simulate admin sending reset command
     await admin_notification._handler("admin_chat", "reset")
 
-    # Verify reset was called and registry is empty
     assert player_registry.reset_called
     assert not player_registry.is_player_registered("+15559999")
     
@@ -197,14 +204,23 @@ async def test_admin_reset_command(sample_config):
     assert "Registry Reset Successful" in admin_notification.sent_logs[0]
 
 @pytest.mark.asyncio
-async def test_admin_unknown_command(sample_config):
+async def test_photo_submission_gating(sample_config):
     config_provider = MockConfigProvider(sample_config)
     player_messaging = MockPlayerMessaging()
     admin_notification = MockAdminNotification()
     player_registry = MockPlayerRegistry()
     engine = ScavengerHuntEngine(config_provider, player_messaging, admin_notification, player_registry)
 
-    await admin_notification._handler("admin_chat", "invalidcmd")
+    # 1. Unregistered photo submission -> Ignored
+    await player_messaging._handler("+15559999", "", "photo_url_abc")
+    assert len(admin_notification.sent_media) == 0
+    assert len(player_messaging.sent_messages) == 0
 
-    assert len(admin_notification.sent_logs) == 1
-    assert "Unrecognized command" in admin_notification.sent_logs[0]
+    # 2. Registered photo submission -> Accepted & Forwarded
+    player_registry.register_player("+15559999")
+    await player_messaging._handler("+15559999", "", "photo_url_abc")
+
+    assert len(admin_notification.sent_media) == 1
+    assert admin_notification.sent_media[0][0] == "photo_url_abc"
+    assert len(player_messaging.sent_messages) == 1
+    assert "*Photo received!*" in player_messaging.sent_messages[0][1]
