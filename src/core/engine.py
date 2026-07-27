@@ -45,7 +45,7 @@ class ScavengerHuntEngine:
 
     async def handle_player_message(self, sender_address: str, text: str, media_identifier: Optional[str] = None) -> None:
         """
-        Main inbound player message callback.
+        Main inbound player message callback. Invalid inputs are ignored outright.
         """
         config = self.config
         player_id = self._get_standardized_player_id(sender_address)
@@ -55,12 +55,9 @@ class ScavengerHuntEngine:
 
         # 1. Check if the player sent a photo
         if media_identifier:
-            # Player must be active to submit photos
+            # Player must be active to submit photos. If not active, ignore outright.
             if not self.player_registry.is_player_registered(player_id):
-                await self.player_messaging.send_message(
-                    sender_address,
-                    "❌ You have not started the Scavenger Hunt yet. Please scan the starting QR code first!"
-                )
+                logger.info(f"Ignored photo submission from unregistered player {player_id}")
                 return
 
             logger.info(f"Forwarding photo submission from registered player {player_id} to admins")
@@ -73,12 +70,8 @@ class ScavengerHuntEngine:
             )
             return
 
-        # 2. Check for empty inputs
+        # 2. Check for empty inputs (ignore outright)
         if not cleaned_text:
-            await self.player_messaging.send_message(
-                sender_address,
-                "👋 Welcome! To start the Scavenger Hunt, please scan the start QR code or enter your start link."
-            )
             return
 
         # 3. Check if input matches the start seed hash
@@ -89,7 +82,6 @@ class ScavengerHuntEngine:
             logger.info(f"Registered new active player: {player_id}")
 
             if not config.locations:
-                await self.player_messaging.send_message(sender_address, "⚠️ No locations are configured for this scavenger hunt.")
                 return
 
             first_clue = config.locations[0].clue
@@ -97,12 +89,9 @@ class ScavengerHuntEngine:
             await self.player_messaging.send_message(sender_address, msg)
             return
 
-        # 4. Gated verification check for registered players only
+        # 4. Gated verification check for registered players only (ignore unregistered text outright)
         if not self.player_registry.is_player_registered(player_id):
-            await self.player_messaging.send_message(
-                sender_address,
-                "❌ You have not registered/started the game yet. Please scan the starting QR code first to register!"
-            )
+            logger.info(f"Ignored message from unregistered player {player_id}: '{cleaned_text}'")
             return
 
         # 5. Check if the parameter matches any location hash
@@ -113,11 +102,9 @@ class ScavengerHuntEngine:
                 location_idx = idx
                 break
 
+        # If it doesn't match any location hash, ignore outright
         if location_idx == -1:
-            await self.player_messaging.send_message(
-                sender_address,
-                "❌ Invalid code scanned. Please make sure you are scanning the official QR code at your current location."
-            )
+            logger.info(f"Ignored invalid token/message from registered player {player_id}: '{cleaned_text}'")
             return
 
         solved_location = config.locations[location_idx]
