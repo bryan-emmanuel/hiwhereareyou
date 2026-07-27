@@ -96,10 +96,8 @@ async def test_location_solve_unregistered_fails(sample_config):
     
     await player_messaging._handler(player_address, loc1_hash)
 
-    assert len(player_messaging.sent_messages) == 1
-    addr, text = player_messaging.sent_messages[0]
-    assert addr == player_address
-    assert "You have not registered/started the game yet" in text
+    # Output message should be ignored outright (no message sent)
+    assert len(player_messaging.sent_messages) == 0
     assert not player_registry.is_player_registered("+15559999")
 
 @pytest.mark.asyncio
@@ -138,9 +136,9 @@ async def test_start_command_wrong_start_hash(sample_config):
 
     await player_messaging._handler(player_address, wrong_start_hash)
 
+    # Invalid start hash should be ignored outright
     assert not player_registry.is_player_registered("+15559999")
-    assert len(player_messaging.sent_messages) == 1
-    assert "You have not registered" in player_messaging.sent_messages[0][1]
+    assert len(player_messaging.sent_messages) == 0
 
 @pytest.mark.asyncio
 async def test_location_solve_registered_player(sample_config):
@@ -182,11 +180,8 @@ async def test_location_solve_sharing_hash_abuse_fails(sample_config):
     
     await player_messaging._handler("+15558888", hash_a)
 
-    # Verification: Player B should fail because hash A doesn't match Player B's location 1 hash
-    assert len(player_messaging.sent_messages) == 1
-    addr, text = player_messaging.sent_messages[0]
-    assert addr == "+15558888"
-    assert "Invalid code scanned" in text
+    # Verification: Player B should be ignored outright because hash A is invalid for Player B
+    assert len(player_messaging.sent_messages) == 0
 
 @pytest.mark.asyncio
 async def test_photo_submission_unregistered_rejected(sample_config):
@@ -199,9 +194,9 @@ async def test_photo_submission_unregistered_rejected(sample_config):
     # Unregistered player sends a photo
     await player_messaging._handler("+15559999", "", "photo_url_abc")
 
+    # Photo should be ignored outright
     assert len(admin_notification.sent_media) == 0
-    assert len(player_messaging.sent_messages) == 1
-    assert "You have not started the Scavenger Hunt yet" in player_messaging.sent_messages[0][1]
+    assert len(player_messaging.sent_messages) == 0
 
 @pytest.mark.asyncio
 async def test_photo_submission_registered_accepted(sample_config):
