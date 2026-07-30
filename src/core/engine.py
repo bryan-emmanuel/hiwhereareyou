@@ -22,7 +22,6 @@ class ScavengerHuntEngine:
         
         # Wire SPI inbound callbacks
         self.player_messaging.set_inbound_handler(self.handle_player_message)
-        self.admin_notification.set_inbound_handler(self.handle_admin_message)
 
     @property
     def config(self) -> GameConfig:

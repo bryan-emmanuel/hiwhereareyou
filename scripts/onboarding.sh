@@ -4,18 +4,20 @@
 
 set -e
 
+export PREFIX=/data/data/com.termux/files/usr
+export PATH=$PREFIX/bin:$PATH
+
 LOG_FILE="$HOME/onboarding.log"
 echo "--- Starting Node Onboarding: $(date) ---" | tee -a "$LOG_FILE"
 
-# 1. Update Termux Packages
-echo "Updating packages..." | tee -a "$LOG_FILE"
+# 1. Update Termux Packages (Skip full upgrade for speed)
+echo "Updating package lists..." | tee -a "$LOG_FILE"
 export DEBIAN_FRONTEND=noninteractive
-pkg update -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" | tee -a "$LOG_FILE"
-pkg upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" | tee -a "$LOG_FILE"
+pkg update -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" > /dev/null 2>&1 || true
 
-# 2. Install Core Dependencies
-echo "Installing core dependencies..." | tee -a "$LOG_FILE"
-pkg install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" git python clang make libffi openssl build-essential procps termux-api termux-services | tee -a "$LOG_FILE"
+# 2. Install Core Dependencies (Only what's necessary)
+echo "Ensuring core dependencies are installed..." | tee -a "$LOG_FILE"
+pkg install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" git python procps termux-api termux-services libjpeg-turbo clang make > /dev/null 2>&1 || true
 
 # 3. Setup Project Directory
 echo "Setting up project directory..." | tee -a "$LOG_FILE"
@@ -25,10 +27,10 @@ PROJECT_DIR="$HOME_DIR/hiwhereareyou"
 if [ ! -d "$PROJECT_DIR" ]; then
     echo "Copying repository from local source..." | tee -a "$LOG_FILE"
     mkdir -p "$PROJECT_DIR"
-    tar -xzf /sdcard/Download/hiwhereareyou_source.tar.gz -C "$PROJECT_DIR" | tee -a "$LOG_FILE"
+    tar -xzf /data/local/tmp/hiwhereareyou_source.tar.gz -C "$PROJECT_DIR" | tee -a "$LOG_FILE"
 else
     echo "Project directory already exists. Updating from local source..." | tee -a "$LOG_FILE"
-    tar -xzf /sdcard/Download/hiwhereareyou_source.tar.gz -C "$PROJECT_DIR" | tee -a "$LOG_FILE"
+    tar -xzf /data/local/tmp/hiwhereareyou_source.tar.gz -C "$PROJECT_DIR" | tee -a "$LOG_FILE"
 fi
 
 cd "$PROJECT_DIR"
@@ -61,4 +63,4 @@ chmod +x "$BOOT_DIR/start-hiwhereareyou.sh"
 
 echo "--- Onboarding Complete ---" | tee -a "$LOG_FILE"
 echo "You can now start the app with: sh start.sh" | tee -a "$LOG_FILE"
-cp "$LOG_FILE" /sdcard/Download/hiwhereareyou_onboarding.log || echo "Warning: Could not copy log to /sdcard"
+cp "$LOG_FILE" ~/storage/downloads/hiwhereareyou_onboarding.log 2>/dev/null || true
