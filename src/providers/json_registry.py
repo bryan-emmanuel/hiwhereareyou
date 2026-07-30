@@ -56,3 +56,20 @@ class JSONPlayerRegistry(PlayerRegistry):
     def is_player_registered(self, player_id: str) -> bool:
         with self._lock:
             return player_id in self._players
+
+    def remove_player(self, player_id: str) -> None:
+        with self._lock:
+            if player_id in self._players:
+                self._players.remove(player_id)
+                self._save_registry_unlocked()
+                logger.info(f"Successfully removed player from allowlist: {player_id}")
+
+    def get_all_players(self) -> list[str]:
+        with self._lock:
+            return list(self._players)
+
+    def reset_registry(self) -> None:
+        with self._lock:
+            self._players.clear()
+            self._save_registry_unlocked()
+            logger.info("Cleared all players from the allowlist.")

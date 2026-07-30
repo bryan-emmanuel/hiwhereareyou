@@ -2,9 +2,13 @@ import os
 import sys
 import asyncio
 import logging
+from dotenv import load_dotenv
 from src.providers.yaml_config import YAMLConfigProvider
 from src.providers.json_registry import JSONPlayerRegistry
 from src.core.engine import ScavengerHuntEngine
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Setup logging
 logging.basicConfig(
@@ -26,9 +30,9 @@ PlayerMessagingClass = TelegramPlayerMessaging
 AdminNotificationClass = TelegramAdminNotification
 
 # Option B: Twilio SMS/MMS (uncomment to bind, comment Option A)
-# from src.plugins.twilio_plugin import TwilioPlayerMessaging, TwilioAdminNotification
+# from src.plugins.twilio_plugin import TwilioPlayerMessaging
 # PlayerMessagingClass = TwilioPlayerMessaging
-# AdminNotificationClass = TwilioAdminNotification
+# AdminNotificationClass = TelegramAdminNotification # No Twilio admin plugin provided yet
 # =====================================================================
 
 

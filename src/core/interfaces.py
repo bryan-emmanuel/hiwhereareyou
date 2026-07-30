@@ -67,6 +67,21 @@ class PlayerRegistry(ABC):
         """Returns True if the player is in the registry, False otherwise."""
         pass
 
+    @abstractmethod
+    def remove_player(self, player_id: str) -> None:
+        """Removes a player ID from the registry."""
+        pass
+
+    @abstractmethod
+    def get_all_players(self) -> list[str]:
+        """Returns a list of all registered player IDs."""
+        pass
+
+    @abstractmethod
+    def reset_registry(self) -> None:
+        """Clears all players from the registry."""
+        pass
+
 class QRProvider(ABC):
     @abstractmethod
     def generate_qr_code(self, data: str) -> bytes:

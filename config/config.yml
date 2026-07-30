@@ -3,13 +3,12 @@
 telegram:
   bot_token: "YOUR_TELEGRAM_BOT_TOKEN"
   bot_username: "YOUR_BOT_USERNAME"  # Without the '@', e.g. MyScavengerHuntBot
-  admin_channel_id: "YOUR_ADMIN_CHANNEL_ID"  # Channel username or numeric ID (e.g. -1001234567890)
+  master_admin_id: "YOUR_MASTER_ADMIN_ID"
 
 twilio:
   account_sid: "YOUR_TWILIO_ACCOUNT_SID"
   auth_token: "YOUR_TWILIO_AUTH_TOKEN"
   phone_number: "+15551234567"  # Your Twilio phone number
-  admin_phone_number: "+15557654321"  # Phone number where admin MMS photos and alerts will be sent
   webhook_host: "0.0.0.0"
   webhook_port: 5000
 

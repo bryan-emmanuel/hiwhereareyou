@@ -54,6 +54,13 @@ class ScavengerHuntEngine:
         player_id = self._get_standardized_player_id(sender_address)
         cleaned_text = text.strip()
 
+        # Intercept admin commands sent to the bot (fixes routing bug where plugins send all to player handler)
+        if str(sender_address) == str(config.telegram_master_admin_id):
+            # Admin sending media should be ignored or handled separately if needed, for now we just handle text commands
+            if cleaned_text:
+                await self.handle_admin_message(sender_address, text)
+            return
+
         logger.info(f"Inbound message from '{sender_address}' (Standardized ID: '{player_id}'): text='{cleaned_text}', media='{media_identifier}'")
 
         # 1. Gated check: If player ID is not registered, ignore the message outright
@@ -133,7 +140,10 @@ class ScavengerHuntEngine:
             help_msg = (
                 "🛠 *Administrator Functions:*\n\n"
                 "• `help` - Show this list of functions.\n"
-                "• `generate <Player ID>` - Register a player's phone number or Telegram ID (e.g. `generate +15551234567` or `generate @username`).\n"
+                "• `allowlist view` - List all registered allowlist users.\n"
+                "• `allowlist add <Player ID>` - Register a player's phone number or Telegram ID.\n"
+                "• `allowlist remove <Player ID>` - Remove a specific player from the allowlist.\n"
+                "• `generate <Player ID>` - (Alias) Register a player.\n"
                 "• `reset` - Reset the active players registry, clearing all registered players.\n"
                 "• `locations` - View all game locations with IDs, clues, and shareable message links.\n"
                 "• `test <message>` - Simulate a player message and receive the same reply a player would."
@@ -151,12 +161,13 @@ class ScavengerHuntEngine:
                 await self.admin_notification.notify_text("❌ *Failed to reset registry.* Check application logs.")
             return
 
-        elif command == "generate":
-            if not args:
-                await self.admin_notification.notify_text("⚠️ *Usage:* `generate <Player ID>` (e.g., `generate +15551234567` or `generate username`)")
+        elif command == "generate" or (command == "allowlist" and args.startswith("add ")):
+            sub_args = args[4:].strip() if command == "allowlist" else args
+            if not sub_args:
+                await self.admin_notification.notify_text("⚠️ *Usage:* `allowlist add <Player ID>`")
                 return
 
-            player_id = args
+            player_id = sub_args
             # Standardize if phone number
             if player_id.startswith("+") or player_id.isdigit() or ("-" in player_id) or ("(" in player_id):
                 try:
@@ -168,7 +179,42 @@ class ScavengerHuntEngine:
             self.player_registry.register_player(player_id)
             
             # Simple confirmation of the successful registration
-            await self.admin_notification.notify_text(f"👤 Player/Group {player_id} registered successfully!")
+            await self.admin_notification.notify_text(f"👤 Player/Group {player_id} added to the allowlist successfully!")
+            return
+
+        elif command == "allowlist" and args == "view":
+            players = self.player_registry.get_all_players()
+            if not players:
+                await self.admin_notification.notify_text("📋 *Allowlist:* Empty.")
+                return
+            
+            lines = ["📋 *Registered Allowlist Users:*\n"]
+            for idx, p in enumerate(players, 1):
+                lines.append(f"{idx}. `{p}`")
+            await self.admin_notification.notify_text("\n".join(lines))
+            return
+
+        elif command == "allowlist" and args.startswith("remove "):
+            player_id = args[7:].strip()
+            if not player_id:
+                await self.admin_notification.notify_text("⚠️ *Usage:* `allowlist remove <Player ID>`")
+                return
+
+            if player_id.startswith("+") or player_id.isdigit() or ("-" in player_id) or ("(" in player_id):
+                try:
+                    player_id = format_phone_number(player_id)
+                except Exception:
+                    pass
+
+            if str(player_id) == str(self.config.telegram_master_admin_id):
+                await self.admin_notification.notify_text("🛡️ *Action Denied:* Cannot remove the master admin from the allowlist. This prevents accidental lockout.")
+                return
+
+            if self.player_registry.is_player_registered(player_id):
+                self.player_registry.remove_player(player_id)
+                await self.admin_notification.notify_text(f"🗑 Player/Group {player_id} removed from the allowlist.")
+            else:
+                await self.admin_notification.notify_text(f"⚠️ Player/Group {player_id} was not found on the allowlist.")
             return
 
         elif command == "locations":
