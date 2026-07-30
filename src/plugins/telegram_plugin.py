@@ -60,6 +60,15 @@ class TelegramPlayerMessaging(PlayerMessagingService):
                 photo_file_id = update.message.photo[-1].file_id
                 await self._handler(chat_id, "", photo_file_id)
 
+        async def status_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+            chat_id = str(update.effective_chat.id)
+            if str(self.config.telegram_master_admin_id) == chat_id:
+                status_msg = "✅ <b>hiwhereareyou Status</b>\n\nSystem is online and running normally."
+                await update.message.reply_text(status_msg, parse_mode=ParseMode.HTML)
+            else:
+                if self._handler:
+                    await self._handler(chat_id, "/status", None)
+
         async def text_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             chat_id = str(update.effective_chat.id)
             text = update.message.text or ""
@@ -69,6 +78,7 @@ class TelegramPlayerMessaging(PlayerMessagingService):
         # Register bot handlers
         self._app.add_handler(CommandHandler("start", start_callback))
         self._app.add_handler(CommandHandler("help", help_callback))
+        self._app.add_handler(CommandHandler("status", status_callback))
         self._app.add_handler(MessageHandler(filters.PHOTO, photo_callback))
         self._app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_callback))
 
@@ -101,7 +111,7 @@ class TelegramAdminNotification(AdminNotificationService):
             raise RuntimeError("TelegramAdminNotification is not initialized.")
         try:
             await self._bot.send_message(
-                chat_id=self.config.telegram_admin_channel_id,
+                chat_id=self.config.telegram_master_admin_id,
                 text=text,
                 parse_mode=ParseMode.MARKDOWN
             )
@@ -114,7 +124,7 @@ class TelegramAdminNotification(AdminNotificationService):
         try:
             # Telegram's send_photo supports both file_ids and external image URLs (e.g. from Twilio)
             await self._bot.send_photo(
-                chat_id=self.config.telegram_admin_channel_id,
+                chat_id=self.config.telegram_master_admin_id,
                 photo=media_identifier,
                 caption=caption
             )
