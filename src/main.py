@@ -25,14 +25,15 @@ logger = logging.getLogger("scavenger_hunt")
 # Choose which plugins to bind to the SPI interfaces at build time:
 
 # Option A: Telegram Bot (Default)
-from src.plugins.telegram_plugin import TelegramPlayerMessaging, TelegramAdminNotification
-PlayerMessagingClass = TelegramPlayerMessaging
-AdminNotificationClass = TelegramAdminNotification
+from src.plugins.telegram_plugin import TelegramAdminNotification
+# from src.plugins.telegram_plugin import TelegramPlayerMessaging
+# PlayerMessagingClass = TelegramPlayerMessaging
+# AdminNotificationClass = TelegramAdminNotification
 
 # Option B: Twilio SMS/MMS (uncomment to bind, comment Option A)
-# from src.plugins.twilio_plugin import TwilioPlayerMessaging
-# PlayerMessagingClass = TwilioPlayerMessaging
-# AdminNotificationClass = TelegramAdminNotification # No Twilio admin plugin provided yet
+from src.plugins.twilio_plugin import TwilioPlayerMessaging
+PlayerMessagingClass = TwilioPlayerMessaging
+AdminNotificationClass = TelegramAdminNotification # No Twilio admin plugin provided yet
 # =====================================================================
 
 
