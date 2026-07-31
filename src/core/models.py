@@ -22,5 +22,7 @@ class GameConfig:
     twilio_webhook_port: int
     
     # Core Game logic parameters
+    start_param: str
+    start_message: str
     final_message: str
     locations: List[Location]

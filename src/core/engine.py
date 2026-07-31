@@ -22,7 +22,6 @@ class ScavengerHuntEngine:
         
         # Wire SPI inbound callbacks
         self.player_messaging.set_inbound_handler(self.handle_player_message)
-        self.admin_notification.set_inbound_handler(self.handle_admin_message)
 
     @property
     def config(self) -> GameConfig:
@@ -53,7 +52,10 @@ class ScavengerHuntEngine:
         config = self.config
         player_id = self._get_standardized_player_id(sender_address)
         cleaned_text = text.strip()
-
+        
+        # Patch for some Android SMS handlers pasting 'body=' directly into the message box
+        if cleaned_text.lower().startswith("body="):
+            cleaned_text = cleaned_text[5:]
         # Intercept admin commands sent to the bot (fixes routing bug where plugins send all to player handler)
         if str(sender_address) == str(config.telegram_master_admin_id):
             # Admin sending media should be ignored or handled separately if needed, for now we just handle text commands

@@ -1,8 +1,7 @@
 import logging
 import asyncio
-from typing import Optional, Union
+from typing import Optional, Set
 from twilio.rest import Client
-from aiohttp import web
 from src.core.interfaces import PlayerMessagingService, AdminNotificationService
 from src.core.models import GameConfig
 
@@ -13,7 +12,8 @@ class TwilioPlayerMessaging(PlayerMessagingService):
         self._handler: Optional[callable] = None
         self.config: Optional[GameConfig] = None
         self.client: Optional[Client] = None
-        self._runner: Optional[web.AppRunner] = None
+        self._polling_task: Optional[asyncio.Task] = None
+        self._seen_sids: Set[str] = set()
 
     def initialize(self, config: GameConfig) -> None:
         """Initialize with build-time config."""
@@ -45,50 +45,64 @@ class TwilioPlayerMessaging(PlayerMessagingService):
         if not self.config:
             raise RuntimeError("TwilioPlayerMessaging is not initialized.")
 
-        # Set up standard aiohttp server for receiving webhooks from Twilio
-        app = web.Application()
-        app.router.add_post("/webhook", self._handle_webhook)
-        
-        self._runner = web.AppRunner(app)
-        await self._runner.setup()
-        
-        site = web.TCPSite(
-            self._runner,
-            self.config.twilio_webhook_host,
-            self.config.twilio_webhook_port
-        )
-        await site.start()
-        logger.info(f"Twilio Webhook HTTP Server started on http://{self.config.twilio_webhook_host}:{self.config.twilio_webhook_port}/webhook")
+        # Pre-fill seen_sids with recent messages so we don't re-process old texts on startup
+        try:
+            logger.info("Initializing Twilio API Poller...")
+            recent_msgs = await asyncio.to_thread(
+                self.client.messages.list,
+                to=self.config.twilio_phone_number,
+                limit=50
+            )
+            for msg in recent_msgs:
+                self._seen_sids.add(msg.sid)
+            logger.info(f"Seeded Twilio poller with {len(self._seen_sids)} historical message SIDs.")
+        except Exception as e:
+            logger.error(f"Failed to seed Twilio poller: {e}")
+
+        self._polling_task = asyncio.create_task(self._poll_messages())
+        logger.info("Twilio API Polling Service started.")
 
     async def stop(self) -> None:
-        if self._runner:
-            await self._runner.cleanup()
-            logger.info("Twilio Player Messaging listener stopped.")
+        if self._polling_task:
+            self._polling_task.cancel()
+            try:
+                await self._polling_task
+            except asyncio.CancelledError:
+                pass
+        logger.info("Twilio API Polling Service stopped.")
 
-    async def _handle_webhook(self, request: web.Request) -> web.Response:
-        """
-        Receives standard application/x-www-form-urlencoded POST requests from Twilio.
-        """
-        try:
-            data = await request.post()
-            sender = data.get("From", "")
-            body = data.get("Body", "")
-            
-            # Twilio specifies media in MediaUrl0, MediaUrl1 etc.
-            num_media = int(data.get("NumMedia", 0))
-            media_url = data.get("MediaUrl0", None) if num_media > 0 else None
-            
-            logger.info(f"Twilio Webhook: From='{sender}', Body='{body}', MediaUrl='{media_url}'")
-            
-            if self._handler:
-                # Forward to Scavenger Hunt core game logic
-                await self._handler(sender, body, media_url)
+    async def _poll_messages(self) -> None:
+        """Continuously polls Twilio for new inbound SMS."""
+        while True:
+            try:
+                # Fetch recent messages sent TO our number
+                messages = await asyncio.to_thread(
+                    self.client.messages.list,
+                    to=self.config.twilio_phone_number,
+                    limit=10
+                )
                 
-        except Exception as e:
-            logger.error(f"Error handling Twilio webhook: {e}")
-            
-        # Return an empty TwiML response
-        return web.Response(text="<Response></Response>", content_type="application/xml")
-
-
-
+                # Process oldest to newest in the batch
+                for msg in reversed(messages):
+                    if msg.sid not in self._seen_sids:
+                        self._seen_sids.add(msg.sid)
+                        
+                        media_url = None
+                        if int(msg.num_media) > 0:
+                            # Fetch media details
+                            media_list = await asyncio.to_thread(msg.media.list)
+                            if media_list:
+                                media_url = f"https://api.twilio.com{media_list[0].uri}".replace(".json", "")
+                                
+                        logger.info(f"Twilio API Poll: New message from='{msg.from_}', Body='{msg.body}', MediaUrl='{media_url}'")
+                        
+                        if self._handler:
+                            await self._handler(msg.from_, msg.body, media_url)
+                            
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.error(f"Error polling Twilio API: {e}")
+                
+            # Wait 3 seconds before polling again
+            await asyncio.sleep(3)
